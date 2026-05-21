@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChessAcademy | Learn the Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;500;600;700&display=swap');
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0b0f19;
+        }
+        .glass-card {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .chess-gradient {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        }
+    </style>
+</head>
+<body class="text-gray-100 min-h-screen flex flex-col justify-between selection:bg-blue-500 selection:text-white">
+
+    <!-- Navigation -->
+    <nav class="glass-card sticky top-0 z-50 px-6 py-4 flex justify-between items-center border-b border-gray-800">
+        <div class="flex items-center gap-3">
+            <div class="chess-gradient p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
+                <i class="fa-solid fa-chess-knight text-xl text-white"></i>
+            </div>
+            <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                ChessAcademy
+            </span>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="text-xs font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-full border border-blue-500/20">
+                Beginner Guide
+            </span>
+        </div>
+    </nav>
+
+    <!-- Main Content Dynamic Container -->
+    <main class="flex-grow flex items-center justify-center p-4 md:p-8" id="view-container">
+        <!-- Views rendered by JavaScript -->
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-6 border-t border-gray-900 text-sm text-gray-500">
+        &copy; 2026 ChessAcademy. Start your journey to mastering the board.
+    </footer>
+
+    <script>
+        const container = document.getElementById('view-container');
+
+        // Structured Course Data pointing to local video files
+        const lessonsData = {
+            1: {
+                title: "Lesson 1: The Language of Chess",
+                videoSrc: "0521.mp4",
+                description: "Learn how to read and write chess moves using Algebraic Notation. Understand board coordinates, piece abbreviations, and special symbols used by players worldwide.",
+                studyNotes: `
+                    <div class="space-y-3">
+                        <p class="text-xs text-gray-300 leading-relaxed">To talk chess, you must speak its map. The board is a grid of 64 squares:</p>
+                        <ul class="space-y-1.5 text-xs text-gray-400 list-disc pl-4">
+                            <li><strong>Files:</strong> Columns lettered <strong>a to h</strong> (from Left to Right for White).</li>
+                            <li><strong>Ranks:</strong> Rows numbered <strong>1 to 8</strong> (1 is White's side, 8 is Black's side).</li>
+                            <li><strong>Piece Codes:</strong> King (K), Queen (Q), Rook (R), Bishop (B), Knight (N). Pawns use no letter!</li>
+                        </ul>
+                    </div>
+                `,
+                quiz: {
+                    question: "If a knight moves to the f3 square without capturing anything, how is this move written in official chess notation?",
+                    options: [
+                        { text: "Kf3", isCorrect: false },
+                        { text: "Nf3", isCorrect: true },
+                        { text: "kn-f3", isCorrect: false },
+                        { text: "f3N", isCorrect: false }
+                    ],
+                    explanation: "Correct! 'N' stands for Knight (since 'K' is reserved for the King) and f3 is the destination square."
+                }
+            },
+            2: {
+                title: "Lesson 2: The Italian Game Opening",
+                videoSrc: "videos/lesson2.mp4",
+                description: "Discover one of the oldest and most respected chess openings. Learn how to control the center safely, develop your pieces actively, and target your opponent's weakest point.",
+                studyNotes: `
+                    <div class="space-y-3">
+                        <p class="text-xs text-gray-300 leading-relaxed">The Italian Game begins with the logical moves <strong>1. e4 e5 2. Nf3 Nc6 3. Bc4</strong>:</p>
+                        <ul class="space-y-1.5 text-xs text-gray-400 list-disc pl-4">
+                            <li><strong>1. e4 e5:</strong> Both sides immediately fight to stake a claim in the vital center squares.</li>
+                            <li><strong>2. Nf3 Nc6:</strong> White attacks the loose e5 pawn while developing a piece. Black defends it.</li>
+                            <li><strong>3. Bc4:</strong> The Italian signature. The bishop steps out to actively control space and eyes Black's weak <strong>f7 square</strong> (the only square protected solely by the black King).</li>
+                        </ul>
+                    </div>
+                `,
+                quiz: {
+                    question: "In the Italian Game, what vulnerable enemy square does White's light-squared Bishop target after moving to c4?",
+                    options: [
+                        { text: "The h7 square", isCorrect: false },
+                        { text: "The e5 square", isCorrect: false },
+                        { text: "The f7 square", isCorrect: true },
+                        { text: "The b2 square", isCorrect: false }
+                    ],
+                    explanation: "Correct! The f7 pawn is Black's weakest starting point because only the King guards it, making it the perfect target for early tactical pressure."
+                }
+            }
+        };
+
+        // View 1: Main Course Dashboard
+        function showDashboard() {
+            container.innerHTML = `
+                <div class="max-w-5xl w-full space-y-12 py-6">
+                    <!-- Hero Section -->
+                    <div class="grid md:grid-cols-5 gap-8 items-center">
+                        <div class="md:col-span-3 space-y-4">
+                            <span class="text-blue-500 font-medium tracking-wide text-xs uppercase bg-blue-500/5 px-2.5 py-1 rounded-md border border-blue-500/10">Curriculum Blueprint</span>
+                            <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
+                                Fundamental Chess <br><span class="bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">For Absolute Beginners</span>
+                            </h1>
+                            <p class="text-gray-400 text-base max-w-xl leading-relaxed">
+                                Chess isn't about memorizing thousands of moves; it's about understanding concepts, recognizing patterns, and controlling space. This course is built to take you from a total beginner to a confident player.
+                            </p>
+                        </div>
+                        <div class="md:col-span-2 flex justify-end">
+                            <div class="glass-card p-6 rounded-2xl border border-gray-800/80 w-full max-w-sm flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
+                                    <i class="fa-solid fa-graduation-cap text-lg"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-white">Your Academy Progress</h4>
+                                    <p class="text-xs text-gray-400 mt-0.5">Select a training lesson below to unlock the video guide and interactive knowledge quiz.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lessons List Section -->
+                    <div class="space-y-4">
+                        <h2 class="text-xl font-bold tracking-tight text-gray-200 flex items-center gap-2">
+                            <i class="fa-solid fa-list-ol text-sm text-blue-500"></i>
+                            <span>Course Lessons & Quizzes</span>
+                        </h2>
+                        
+                        <div class="grid gap-3">
+                            <!-- Lesson 1 Link -->
+                            <div class="glass-card p-4 rounded-xl border border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-gray-700 transition-all">
+                                <div class="flex items-start gap-4">
+                                    <div class="w-10 h-10 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center font-bold text-sm text-blue-400 shrink-0 mt-0.5">01</div>
+                                    <div>
+                                        <h3 class="font-bold text-white text-base">${lessonsData[1].title}</h3>
+                                        <p class="text-xs text-gray-400 mt-0.5">${lessonsData[1].description}</p>
+                                    </div>
+                                </div>
+                                <button onclick="showVideoPage(1)" class="chess-gradient text-white text-xs font-semibold px-4 py-2.5 rounded-lg hover:opacity-90 transition-all shrink-0 w-full sm:w-auto text-center flex items-center justify-center gap-2">
+                                    <span>Start Lesson</span>
+                                    <i class="fa-solid fa-play text-[10px]"></i>
+                                </button>
+                            </div>
+
+                            <!-- Lesson 2 Link -->
+                            <div class="glass-card p-4 rounded-xl border border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-gray-700 transition-all">
+                                <div class="flex items-start gap-4">
+                                    <div class="w-10 h-10 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center font-bold text-sm text-blue-400 shrink-0 mt-0.5">02</div>
+                                    <div>
+                                        <h3 class="font-bold text-white text-base">${lessonsData[2].title}</h3>
+                                        <p class="text-xs text-gray-400 mt-0.5">${lessonsData[2].description}</p>
+                                    </div>
+                                </div>
+                                <button onclick="showVideoPage(2)" class="chess-gradient text-white text-xs font-semibold px-4 py-2.5 rounded-lg hover:opacity-90 transition-all shrink-0 w-full sm:w-auto text-center flex items-center justify-center gap-2">
+                                    <span>Start Lesson</span>
+                                    <i class="fa-solid fa-play text-[10px]"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // View 2: Local Video Classroom Player & Real-time Quiz Engine
+        function showVideoPage(id) {
+            const lesson = lessonsData[id];
+            
+            container.innerHTML = `
+                <div class="max-w-5xl w-full grid lg:grid-cols-3 gap-6 py-4">
+                    <!-- Left Side: Player Container & Interactive Quiz Layer -->
+                    <div class="lg:col-span-2 space-y-6">
+                        <div>
+                            <button onclick="showDashboard()" class="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white font-medium transition-colors group mb-4">
+                                <i class="fa-solid fa-arrow-left text-[10px] transition-transform group-hover:-translate-x-0.5"></i>
+                                <span>Return to Lessons Index</span>
+                            </button>
+
+                            <!-- Native Video Player for Local Assets -->
+                            <div class="glass-card rounded-2xl overflow-hidden shadow-2xl border border-gray-800 aspect-video w-full bg-black">
+                                <video class="w-full h-full object-contain" controls preload="metadata">
+                                    <source src="${lesson.videoSrc}" type="video/mp4">
+                                    Your browser does not support the video tag. Please try using modern browsers like Chrome or Safari.
+                                </video>
+                            </div>
+
+                            <!-- Info Metadata -->
+                            <div class="p-2 mt-4 space-y-2">
+                                <h2 class="text-2xl font-bold text-white">${lesson.title}</h2>
+                                <p class="text-sm text-gray-400 leading-relaxed">${lesson.description}</p>
+                            </div>
+                        </div>
+
+                        <!-- Real-time Lesson Quiz Block -->
+                        <div class="glass-card rounded-2xl p-6 border border-gray-800/80 space-y-4">
+                            <div class="flex items-center gap-2 border-b border-gray-800 pb-3">
+                                <div class="w-7 h-7 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs">
+                                    <i class="fa-solid fa-lightbulb"></i>
+                                </div>
+                                <h3 class="text-sm font-bold tracking-wide uppercase text-gray-200">Lesson Checkpoint Quiz</h3>
+                            </div>
+                            
+                            <p class="text-sm text-gray-300 font-medium leading-relaxed">${lesson.quiz.question}</p>
+                            
+                            <!-- Options Container -->
+                            <div class="grid gap-2.5" id="quiz-options-box">
+                                ${lesson.quiz.options.map((option, idx) => `
+                                    <button onclick="checkAnswer(${option.isCorrect}, ${idx}, '${lesson.quiz.explanation.replace(/'/g, "\\'")}')" 
+                                            class="quiz-opt-btn w-full text-left p-3.5 rounded-xl border border-gray-800 bg-gray-950/30 text-xs font-medium text-gray-300 hover:bg-gray-800/40 hover:border-gray-700 transition-all flex items-center justify-between group">
+                                        <span>${option.text}</span>
+                                        <i class="fa-regular fa-circle text-gray-600 group-hover:text-gray-400 text-[10px]"></i>
+                                    </button>
+                                `).join('')}
+                            </div>
+
+                            <!-- Live Feedback Placeholder -->
+                            <div id="quiz-feedback-box" class="hidden p-4 rounded-xl text-xs leading-relaxed transition-all"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right Side: Sidebar Training Guidelines -->
+                    <div class="space-y-4 lg:pt-10">
+                        <div class="glass-card rounded-2xl p-5 border border-gray-800 space-y-4">
+                            <h3 class="text-sm font-bold tracking-wide uppercase text-gray-400">Quick Study Guide</h3>
+                            ${lesson.studyNotes}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Quiz State Evaluation Engine
+        function checkAnswer(isCorrect, selectedIdx, explanationText) {
+            const feedbackBox = document.getElementById('quiz-feedback-box');
+            const optionButtons = document.querySelectorAll('.quiz-opt-btn');
+
+            // Lock all quiz buttons to prevent changing choice after evaluation
+            optionButtons.forEach((btn, index) => {
+                btn.disabled = true;
+                const icon = btn.querySelector('i');
+                if (index === selectedIdx) {
+                    if (isCorrect) {
+                        btn.classList.replace('border-gray-800', 'border-green-500/30');
+                        btn.classList.add('bg-green-500/5');
+                        icon.className = "fa-solid fa-circle-check text-green-400 text-[11px]";
+                    } else {
+                        btn.classList.replace('border-gray-800', 'border-red-500/30');
+                        btn.classList.add('bg-red-500/5');
+                        icon.className = "fa-solid fa-circle-xmark text-red-400 text-[11px]";
+                    }
+                }
+            });
+
+            // Reveal customized feedback context alert box
+            feedbackBox.classList.remove('hidden', 'bg-green-500/10', 'text-green-400', 'border-green-500/20', 'bg-red-500/10', 'text-red-400', 'border-red-500/20');
+            
+            if (isCorrect) {
+                feedbackBox.className = "p-4 rounded-xl text-xs leading-relaxed border bg-green-500/5 text-green-400 border-green-500/20 flex gap-3 items-start";
+                feedbackBox.innerHTML = `
+                    <i class="fa-solid fa-circle-check mt-0.5 text-sm"></i>
+                    <div><span class="font-bold block mb-0.5">Excellent Match Analysis!</span> ${explanationText}</div>
+                `;
+            } else {
+                feedbackBox.className = "p-4 rounded-xl text-xs leading-relaxed border bg-red-500/5 text-red-400 border-red-500/20 flex gap-3 items-start";
+                feedbackBox.innerHTML = `
+                    <i class="fa-solid fa-circle-xmark mt-0.5 text-sm"></i>
+                    <div><span class="font-bold block mb-0.5">Incorrect Move.</span> Re-evaluate the board rules, look carefully over the study notes, and try another option on your next match setup!</div>
+                `;
+            }
+        }
+
+        // Initialize setup
+        showDashboard();
+    </script>
+</body>
+</html>
