@@ -488,11 +488,18 @@
             }
 
             .chess-piece {
-                font-size: clamp(25px, 10vw, 44px);
+                font-size: clamp(28px, 10.5vw, 54px);
             }
         }
 
-    </style>
+    
+        .replay-board-wrap { width:min(100%,620px); margin:0 auto; border:3px solid #c7a54b; border-radius:12px; overflow:hidden; box-shadow:0 12px 30px rgba(0,0,0,.25); }
+        .deep-blue-board { display:grid; grid-template-columns:repeat(8,1fr); aspect-ratio:1; }
+        .replay-square { display:flex; align-items:center; justify-content:center; aspect-ratio:1; }
+        .replay-square.light { background:#f0e7cd; } .replay-square.dark { background:#7a654f; }
+        #deep-blue-moves { max-height:300px; overflow:auto; }
+        @media (max-width:640px) { .replay-board-wrap { border-width:2px; border-radius:8px; } }
+</style>
 </head>
 <body class="text-gray-100 min-h-screen flex flex-col justify-between selection:bg-blue-500 selection:text-white">
 
@@ -509,6 +516,9 @@
         <div class="nav-actions flex items-center gap-3">
             <button onclick="showChessBoard()" class="text-xs font-semibold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 px-3 py-1.5 rounded-full border border-indigo-500/20 hover:bg-indigo-500/20 transition">
                 <i class="fa-solid fa-chess-board mr-1"></i> Interactive Board
+            </button>
+            <button onclick="showDeepBlueMatch()" class="text-xs font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-full border border-blue-500/20 hover:bg-blue-500/20 transition">
+                <i class="fa-solid fa-trophy mr-1"></i> Deep Blue Match
             </button>
             <span class="text-xs font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-full border border-blue-500/20">
                 Beginner Guide
@@ -734,6 +744,13 @@
             w: { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" },
             b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" }
         };
+
+        // Clean, modern vector pieces inspired by the proportions and
+        // readability of popular online chess boards. These are original
+        // inline SVG shapes, so the board works without external assets.
+        function pieceSVG(color, type, extraClass = "") {
+            return PIECES[color][type];
+        }
 
         let chessState = null;
 
@@ -1120,7 +1137,7 @@
                     if (piece) {
                         const span = document.createElement("span");
                         span.className = "chess-piece " + colorOf(piece);
-                        span.textContent = PIECES[colorOf(piece)][typeOf(piece)];
+                        span.innerHTML = pieceSVG(colorOf(piece), typeOf(piece));
                         sq.appendChild(span);
                     }
 
@@ -1200,19 +1217,19 @@
                     </div>
                     <div class="promotion-options">
                         <button type="button" class="promotion-option" data-piece="q" title="Queen">
-                            <span class="promotion-piece ${color}">${PIECES[color].q}</span>
+                            <span class="promotion-piece ${color}">${pieceSVG(color, "q")}</span>
                             <span>Queen</span>
                         </button>
                         <button type="button" class="promotion-option" data-piece="r" title="Rook">
-                            <span class="promotion-piece ${color}">${PIECES[color].r}</span>
+                            <span class="promotion-piece ${color}">${pieceSVG(color, "r")}</span>
                             <span>Rook</span>
                         </button>
                         <button type="button" class="promotion-option" data-piece="b" title="Bishop">
-                            <span class="promotion-piece ${color}">${PIECES[color].b}</span>
+                            <span class="promotion-piece ${color}">${pieceSVG(color, "b")}</span>
                             <span>Bishop</span>
                         </button>
                         <button type="button" class="promotion-option" data-piece="n" title="Knight">
-                            <span class="promotion-piece ${color}">${PIECES[color].n}</span>
+                            <span class="promotion-piece ${color}">${pieceSVG(color, "n")}</span>
                             <span>Knight</span>
                         </button>
                     </div>
@@ -1329,6 +1346,154 @@
             }
 
             renderChessBoard();
+        }
+
+
+        // Deep Blue vs. Kasparov — 1997 Rematch, Game 6 replay.
+        // The move list is the 19-move game that ended 1-0.
+        const DEEP_BLUE_PGN = [
+            ["e2","e4"],["c7","c6"],
+            ["d2","d4"],["d7","d5"],
+            ["b1","c3"],["d5","e4"],
+            ["c3","e4"],["g8","f6"],
+            ["e4","g5"],["f6","g8"],
+            ["f1","d3"],["e7","e6"],
+            ["g1","f3"],["h7","h6"],
+            ["f3","e5"],["d8","e7"],
+            ["e1","g1"],["f7","e6"],
+            ["d3","g6"],["e8","d8"],
+            ["c1","f4"],["b7","b5"],
+            ["a2","a4"],["c8","b7"],
+            ["f1","e1"],["f6","d5"],
+            ["f4","g3"],["d8","c8"],
+            ["a4","b5"],["c6","b5"],
+            ["d1","d3"],["c8","c6"],
+            ["g3","f5"],["e6","f5"],
+            ["e1","e7"],["c6","e7"],
+            ["c2","c4"]
+        ];
+
+        const DEEP_BLUE_SAN = [
+            "1. e4 c6", "2. d4 d5", "3. Nc3 dxe4", "4. Nxe4 Nd7",
+            "5. Ng5 Ngf6", "6. Bd3 e6", "7. N1f3 h6", "8. Nxe6 Qe7",
+            "9. O-O fxe6", "10. Bg6+ Kd8", "11. Bf4 b5", "12. a4 Bb7",
+            "13. Re1 Nd5", "14. Bg3 Kc8", "15. axb5 cxb5", "16. Qd3 Bc6",
+            "17. Bf5 exf5", "18. Rxe7 Bxe7", "19. c4 1-0"
+        ];
+
+        let deepBlueState = { board: null, ply: 0, history: [] };
+
+        function cloneBoardForReplay(board) {
+            return board.map(row => row.slice());
+        }
+
+        function replayInitialBoard() {
+            return initialChessBoard().map(row => row.slice());
+        }
+
+        function coordToRC(square) {
+            return [8 - Number(square[1]), square.charCodeAt(0) - 97];
+        }
+
+        function applyReplayMove(board, from, to) {
+            const [fr, fc] = coordToRC(from);
+            const [tr, tc] = coordToRC(to);
+            board[tr][tc] = board[fr][fc];
+            board[fr][fc] = null;
+        }
+
+        function renderDeepBlueBoard() {
+            const boardEl = document.getElementById('deep-blue-board');
+            if (!boardEl) return;
+            boardEl.innerHTML = '';
+            for (let r=0; r<8; r++) {
+                for (let c=0; c<8; c++) {
+                    const sq = document.createElement('div');
+                    sq.className = `replay-square ${(r+c)%2===0?'light':'dark'}`;
+                    const piece = deepBlueState.board[r][c];
+                    if (piece) {
+                        const holder = document.createElement('span');
+                        holder.className = `chess-piece ${colorOf(piece)}`;
+                        holder.innerHTML = pieceSVG(colorOf(piece), typeOf(piece));
+                        sq.appendChild(holder);
+                    }
+                    boardEl.appendChild(sq);
+                }
+            }
+            const current = deepBlueState.ply;
+            document.getElementById('deep-blue-status').textContent =
+                current >= DEEP_BLUE_PGN.length ? 'Deep Blue wins — 1–0' :
+                (current % 2 === 0 ? 'Deep Blue to move' : 'Kasparov to move');
+            document.getElementById('deep-blue-progress').textContent =
+                `Move ${Math.min(19, Math.floor(current/2)+1)} / 19 • ${current} plies`;
+            document.getElementById('deep-blue-move').textContent =
+                current === 0 ? 'Starting position' : DEEP_BLUE_SAN[Math.floor((current-1)/2)];
+            const list = document.getElementById('deep-blue-moves');
+            if (list) list.innerHTML = DEEP_BLUE_SAN.map((m,i) =>
+                `<span class="${i === Math.floor((current-1)/2) ? 'text-blue-300 font-bold' : 'text-gray-400'}">${m}</span>`
+            ).join(' ');
+        }
+
+        function deepBlueReset() {
+            deepBlueState = { board: replayInitialBoard(), ply: 0, history: [] };
+            renderDeepBlueBoard();
+        }
+
+        function deepBlueNext() {
+            if (deepBlueState.ply >= DEEP_BLUE_PGN.length) return;
+            deepBlueState.history.push(cloneBoardForReplay(deepBlueState.board));
+            const [from,to] = DEEP_BLUE_PGN[deepBlueState.ply];
+            applyReplayMove(deepBlueState.board, from, to);
+            deepBlueState.ply++;
+            renderDeepBlueBoard();
+        }
+
+        function deepBluePrev() {
+            if (!deepBlueState.ply) return;
+            deepBlueState.board = deepBlueState.history.pop();
+            deepBlueState.ply--;
+            renderDeepBlueBoard();
+        }
+
+        function showDeepBlueMatch() {
+            container.innerHTML = `
+                <div class="page-container max-w-6xl w-full py-5">
+                    <div class="mb-4">
+                        <button onclick="showDashboard()" class="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white font-medium transition-colors">
+                            <i class="fa-solid fa-arrow-left text-[10px]"></i> Return to Lessons
+                        </button>
+                    </div>
+                    <div class="glass-card rounded-2xl p-4 sm:p-6 border border-gray-800">
+                        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+                            <div>
+                                <span class="text-xs uppercase tracking-widest text-blue-400 font-bold">Famous Game Replay</span>
+                                <h1 class="text-2xl sm:text-3xl font-bold text-white mt-1">Deep Blue vs. Kasparov</h1>
+                                <p class="text-sm text-gray-400 mt-1">Game 6 • 11 May 1997 • New York</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="deepBluePrev()" class="chess-control-btn"><i class="fa-solid fa-backward-step mr-1"></i> Previous</button>
+                                <button onclick="deepBlueNext()" class="chess-control-btn"><i class="fa-solid fa-forward-step mr-1"></i> Next Move</button>
+                                <button onclick="deepBlueReset()" class="chess-control-btn"><i class="fa-solid fa-rotate-left mr-1"></i> Reset</button>
+                            </div>
+                        </div>
+                        <div class="grid lg:grid-cols-[minmax(320px,620px)_1fr] gap-6 items-start">
+                            <div class="replay-board-wrap"><div id="deep-blue-board" class="deep-blue-board"></div></div>
+                            <div class="space-y-4">
+                                <div class="glass-card rounded-xl p-4 border border-gray-800">
+                                    <div class="flex justify-between items-center"><span class="text-xs uppercase tracking-wider text-gray-500">Status</span><span id="deep-blue-status" class="font-bold text-blue-400">Deep Blue to move</span></div>
+                                    <p id="deep-blue-progress" class="text-xs text-gray-500 mt-2">Move 1 / 19 • 0 plies</p>
+                                    <p id="deep-blue-move" class="text-sm text-gray-300 mt-3">Starting position</p>
+                                </div>
+                                <div class="glass-card rounded-xl p-4 border border-gray-800">
+                                    <h2 class="font-bold text-white mb-2">Game 6</h2>
+                                    <p class="text-xs text-gray-400 leading-relaxed mb-3">Deep Blue played White. Kasparov played Black. Kasparov resigned after 19.c4.</p>
+                                    <div id="deep-blue-moves" class="text-xs leading-6"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            deepBlueReset();
         }
 
         function showChessBoard() {
