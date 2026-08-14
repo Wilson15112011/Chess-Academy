@@ -122,6 +122,19 @@
         .chess-piece.w { color: #fffaf0; }
         .chess-piece.b { color: #151515; text-shadow: 0 2px 1px rgba(255,255,255,.15); }
 
+        .chess-control-btn {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 8px 11px;
+            border-radius: 9px;
+            background: #1f2937;
+            color: #e5e7eb;
+            border: 1px solid #374151;
+            transition: background .15s ease, transform .15s ease;
+        }
+        .chess-control-btn:hover { background: #374151; transform: translateY(-1px); }
+        .chess-control-btn:active { transform: translateY(0); }
+
         .files-labels {
             display: grid;
             grid-template-columns: repeat(8, 1fr);
@@ -133,6 +146,20 @@
             font-size: 10px;
             text-align: center;
             pointer-events: none;
+        }
+        .ranks-labels {
+            display: grid;
+            grid-template-rows: repeat(8, 1fr);
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 18px;
+            width: 16px;
+            color: #9ca3af;
+            font-size: 10px;
+            text-align: center;
+            pointer-events: none;
+            align-items: center;
         }
 
         @media (max-width: 640px) {
@@ -402,8 +429,47 @@
                 lastMove: null,
                 enPassant: null,
                 castling: { wK: true, wQ: true, bK: true, bQ: true },
-                message: "White to move"
+                message: "White to move",
+                history: [],
+                flipped: false
             };
+            renderChessBoard();
+        }
+
+        function cloneChessState(state) {
+            return {
+                board: state.board.map(row => row.slice()),
+                turn: state.turn,
+                selected: null,
+                lastMove: state.lastMove ? { from: {...state.lastMove.from}, to: {...state.lastMove.to} } : null,
+                enPassant: state.enPassant ? {...state.enPassant} : null,
+                castling: {...state.castling},
+                message: state.message,
+                history: [],
+                flipped: state.flipped
+            };
+        }
+
+        function undoChessMove() {
+            if (!chessState || chessState.history.length === 0) {
+                if (chessState) chessState.message = "There is no move to take back.";
+                renderChessBoard();
+                return;
+            }
+            const previous = chessState.history.pop();
+            const remainingHistory = chessState.history;
+            const orientation = chessState.flipped;
+            chessState = cloneChessState(previous);
+            chessState.history = remainingHistory;
+            chessState.flipped = orientation;
+            chessState.message = `${chessState.turn === "w" ? "White" : "Black"} to move — move taken back.`;
+            renderChessBoard();
+        }
+
+        function toggleBoardRotation() {
+            if (!chessState) return;
+            chessState.flipped = !chessState.flipped;
+            chessState.selected = null;
             renderChessBoard();
         }
 
@@ -681,17 +747,30 @@
 
             boardEl.innerHTML = "";
 
+            const filesEl = document.getElementById("files-labels");
+            const ranksEl = document.getElementById("ranks-labels");
+            if (filesEl) {
+                const files = chessState.flipped ? ["h","g","f","e","d","c","b","a"] : ["a","b","c","d","e","f","g","h"];
+                filesEl.innerHTML = files.map(f => `<span>${f}</span>`).join("");
+            }
+            if (ranksEl) {
+                const ranks = chessState.flipped ? ["1","2","3","4","5","6","7","8"] : ["8","7","6","5","4","3","2","1"];
+                ranksEl.innerHTML = ranks.map(r => `<span>${r}</span>`).join("");
+            }
+
             const currentColor = chessState.turn;
             const inCheck = isInCheck(chessState.board, currentColor);
             const movesForTurn = allLegalMoves(chessState.board, currentColor);
             const checkmate = inCheck && movesForTurn.length === 0;
             const stalemate = !inCheck && movesForTurn.length === 0;
 
-            for (let r=0; r<8; r++) {
-                for (let c=0; c<8; c++) {
+            for (let displayR=0; displayR<8; displayR++) {
+                for (let displayC=0; displayC<8; displayC++) {
+                    const r = chessState.flipped ? 7 - displayR : displayR;
+                    const c = chessState.flipped ? 7 - displayC : displayC;
                     const sq = document.createElement("button");
                     sq.type = "button";
-                    sq.className = "chess-square " + ((r+c)%2===0 ? "light" : "dark");
+                    sq.className = "chess-square " + ((displayR+displayC)%2===0 ? "light" : "dark");
                     sq.dataset.r = r;
                     sq.dataset.c = c;
 
@@ -785,6 +864,10 @@
                 const move = legal.find(m => m.r === r && m.c === c);
 
                 if (move) {
+                    // Save the complete position so Undo restores castling and en-passant rights too.
+                    const snapshot = cloneChessState(chessState);
+                    snapshot.history = [];
+                    chessState.history.push(snapshot);
                     const movingPiece = chessState.board[from.r][from.c];
                     const capturedPiece = chessState.board[move.r][move.c];
                     const wasEnPassant = move.special === "enPassant";
@@ -867,17 +950,23 @@
                                         <h1 class="text-2xl font-bold text-white">Interactive Chess Board</h1>
                                         <p class="text-xs text-gray-400 mt-1">Click a piece, then click its destination.</p>
                                     </div>
-                                    <button onclick="resetChessGame()" class="text-xs font-semibold px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200">
-                                        <i class="fa-solid fa-rotate-left mr-1"></i> Reset
-                                    </button>
+                                    <div class="flex flex-wrap gap-2 justify-end">
+                                        <button onclick="undoChessMove()" class="chess-control-btn">
+                                            <i class="fa-solid fa-arrow-rotate-left mr-1"></i> Take Back
+                                        </button>
+                                        <button onclick="toggleBoardRotation()" class="chess-control-btn">
+                                            <i class="fa-solid fa-arrows-rotate mr-1"></i> Rotate Board
+                                        </button>
+                                        <button onclick="resetChessGame()" class="chess-control-btn">
+                                            <i class="fa-solid fa-rotate-left mr-1"></i> Reset
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="flex justify-center">
                                     <div class="board-wrap">
-                                        <div class="files-labels">
-                                            <span>a</span><span>b</span><span>c</span><span>d</span>
-                                            <span>e</span><span>f</span><span>g</span><span>h</span>
-                                        </div>
+                                        <div id="files-labels" class="files-labels"></div>
+                                        <div id="ranks-labels" class="ranks-labels"></div>
                                         <div id="interactive-chess-board" class="interactive-chess-board" aria-label="Interactive chess board"></div>
                                     </div>
                                 </div>
