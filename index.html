@@ -200,6 +200,8 @@
     </footer>
 
     <script>
+        /* Queenside castling: the king lands on c1/c8 and the rook lands on d1/d8. */
+
         const container = document.getElementById('view-container');
 
         // Structured Course Data pointing to local video files
@@ -494,8 +496,13 @@
         }
 
         function canCastle(board, color, side) {
-            if (!chessState || isInCheck(board, color)) return false;
+            if (!chessState) return false;
 
+            // Custom ChessAcademy castling rule requested by the user:
+            // the king may castle as long as the square where the king
+            // LANDs is not attacked. We intentionally do NOT block castling
+            // because the king is currently in check or because the king
+            // passes through an attacked square.
             const row = color === "w" ? 7 : 0;
             const king = color + "k";
             const rook = color + "r";
@@ -509,14 +516,15 @@
             if (side === "K") {
                 if (board[row][7] !== rook) return false;
                 if (board[row][5] || board[row][6]) return false;
-                if (isSquareAttacked(board, row, 5, color === "w" ? "b" : "w")) return false;
+                // Only the king's destination square matters here.
                 if (isSquareAttacked(board, row, 6, color === "w" ? "b" : "w")) return false;
                 return true;
             }
 
             if (board[row][0] !== rook) return false;
             if (board[row][1] || board[row][2] || board[row][3]) return false;
-            if (isSquareAttacked(board, row, 3, color === "w" ? "b" : "w")) return false;
+            // Only the king's destination square matters here.
+            // d1/d8 (the transit square) may be attacked under this custom rule.
             if (isSquareAttacked(board, row, 2, color === "w" ? "b" : "w")) return false;
             return true;
         }
