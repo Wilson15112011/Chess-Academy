@@ -20,6 +20,101 @@
         .chess-gradient {
             background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
         }
+
+        .board-wrap {
+            width: min(78vw, 560px);
+            position: relative;
+            padding-left: 18px;
+            padding-bottom: 18px;
+        }
+
+        .interactive-chess-board {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            overflow: hidden;
+            border: 3px solid #d1a954;
+            border-radius: 10px;
+            box-shadow: 0 18px 45px rgba(0,0,0,.35);
+        }
+
+        .chess-square {
+            border: 0;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+            transition: filter .12s ease, box-shadow .12s ease;
+        }
+
+        .chess-square.light { background: #eadfc5; }
+        .chess-square.dark { background: #705c48; }
+
+        .chess-square:hover { filter: brightness(1.08); }
+
+        .chess-square.selected {
+            box-shadow: inset 0 0 0 4px rgba(59,130,246,.9);
+        }
+
+        .chess-square.last-move::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: rgba(250, 204, 21, .22);
+            pointer-events: none;
+        }
+
+        .chess-square.legal::before {
+            content: "";
+            width: 22%;
+            height: 22%;
+            border-radius: 999px;
+            background: rgba(30, 64, 175, .55);
+            position: absolute;
+            z-index: 1;
+        }
+
+        .chess-square.legal.capture::before {
+            width: 72%;
+            height: 72%;
+            background: transparent;
+            border: 5px solid rgba(30, 64, 175, .58);
+        }
+
+        .chess-piece {
+            font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
+            font-size: clamp(32px, 7vw, 64px);
+            line-height: 1;
+            position: relative;
+            z-index: 2;
+            user-select: none;
+            text-shadow: 0 2px 1px rgba(0,0,0,.35);
+        }
+
+        .chess-piece.w { color: #fffaf0; }
+        .chess-piece.b { color: #151515; text-shadow: 0 2px 1px rgba(255,255,255,.15); }
+
+        .files-labels {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            position: absolute;
+            left: 18px;
+            right: 0;
+            bottom: 0;
+            color: #9ca3af;
+            font-size: 10px;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        @media (max-width: 640px) {
+            .board-wrap { width: min(94vw, 520px); }
+        }
     </style>
 </head>
 <body class="text-gray-100 min-h-screen flex flex-col justify-between selection:bg-blue-500 selection:text-white">
@@ -34,7 +129,10 @@
                 ChessAcademy
             </span>
         </div>
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
+            <button onclick="showChessBoard()" class="text-xs font-semibold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 px-3 py-1.5 rounded-full border border-indigo-500/20 hover:bg-indigo-500/20 transition">
+                <i class="fa-solid fa-chess-board mr-1"></i> Interactive Board
+            </button>
             <span class="text-xs font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-full border border-blue-500/20">
                 Beginner Guide
             </span>
@@ -244,6 +342,350 @@
                     </div>
                 </div>
             `;
+        }
+
+        // ============================================================
+        // Interactive Chess Board
+        // Includes normal moves, captures, promotion and EN PASSANT.
+        // En passant is available only immediately after an opponent
+        // moves a pawn two squares from its starting rank.
+        // ============================================================
+
+        const PIECES = {
+            w: { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" },
+            b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" }
+        };
+
+        let chessState = null;
+
+        function initialChessBoard() {
+            return [
+                ["br","bn","bb","bq","bk","bb","bn","br"],
+                ["bp","bp","bp","bp","bp","bp","bp","bp"],
+                [null,null,null,null,null,null,null,null],
+                [null,null,null,null,null,null,null,null],
+                [null,null,null,null,null,null,null,null],
+                [null,null,null,null,null,null,null,null],
+                ["wp","wp","wp","wp","wp","wp","wp","wp"],
+                ["wr","wn","wb","wq","wk","wb","wn","wr"]
+            ];
+        }
+
+        function resetChessGame() {
+            chessState = {
+                board: initialChessBoard(),
+                turn: "w",
+                selected: null,
+                lastMove: null,
+                enPassant: null,
+                message: "White to move"
+            };
+            renderChessBoard();
+        }
+
+        function squareName(r, c) {
+            return "abcdefgh"[c] + (8 - r);
+        }
+
+        function inside(r, c) {
+            return r >= 0 && r < 8 && c >= 0 && c < 8;
+        }
+
+        function colorOf(piece) {
+            return piece ? piece[0] : null;
+        }
+
+        function typeOf(piece) {
+            return piece ? piece[1] : null;
+        }
+
+        function sameColor(a, b) {
+            return a && b && colorOf(a) === colorOf(b);
+        }
+
+        function pseudoMoves(board, r, c, includeKingSafety = false) {
+            const piece = board[r][c];
+            if (!piece) return [];
+            const color = colorOf(piece);
+            const type = typeOf(piece);
+            const moves = [];
+
+            const add = (nr, nc, special = null) => {
+                if (!inside(nr, nc)) return;
+                const target = board[nr][nc];
+                if (!target || colorOf(target) !== color) {
+                    moves.push({ r: nr, c: nc, special });
+                }
+            };
+
+            if (type === "p") {
+                const dir = color === "w" ? -1 : 1;
+                const start = color === "w" ? 6 : 1;
+                const one = r + dir;
+                if (inside(one, c) && !board[one][c]) {
+                    add(one, c);
+                    const two = r + dir * 2;
+                    if (r === start && !board[two][c]) add(two, c, "doublePawn");
+                }
+
+                for (const dc of [-1, 1]) {
+                    const nr = r + dir, nc = c + dc;
+                    if (!inside(nr, nc)) continue;
+                    if (board[nr][nc] && colorOf(board[nr][nc]) !== color) {
+                        add(nr, nc);
+                    }
+                }
+
+                // EN PASSANT: capture the adjacent pawn only if the
+                // immediately previous move was a two-square pawn move.
+                if (chessState && chessState.enPassant) {
+                    const ep = chessState.enPassant;
+                    if (ep.r === one && Math.abs(ep.c - c) === 1 && !board[ep.r][ep.c]) {
+                        const adjacent = board[r][ep.c];
+                        if (adjacent === (color === "w" ? "bp" : "wp")) {
+                            moves.push({ r: ep.r, c: ep.c, special: "enPassant" });
+                        }
+                    }
+                }
+            }
+
+            if (type === "n") {
+                [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]
+                    .forEach(([dr,dc]) => add(r+dr,c+dc));
+            }
+
+            if (type === "k") {
+                for (let dr=-1; dr<=1; dr++) {
+                    for (let dc=-1; dc<=1; dc++) {
+                        if (dr || dc) add(r+dr,c+dc);
+                    }
+                }
+            }
+
+            const slide = (dirs) => {
+                for (const [dr,dc] of dirs) {
+                    let nr=r+dr, nc=c+dc;
+                    while (inside(nr,nc)) {
+                        if (!board[nr][nc]) {
+                            moves.push({r:nr,c:nc});
+                        } else {
+                            if (colorOf(board[nr][nc]) !== color) {
+                                moves.push({r:nr,c:nc});
+                            }
+                            break;
+                        }
+                        nr += dr; nc += dc;
+                    }
+                }
+            };
+
+            if (type === "b" || type === "q") {
+                slide([[-1,-1],[-1,1],[1,-1],[1,1]]);
+            }
+            if (type === "r" || type === "q") {
+                slide([[-1,0],[1,0],[0,-1],[0,1]]);
+            }
+
+            return moves;
+        }
+
+        function applyMove(board, from, move) {
+            const next = board.map(row => row.slice());
+            const piece = next[from.r][from.c];
+            next[move.r][move.c] = piece;
+            next[from.r][from.c] = null;
+
+            if (move.special === "enPassant") {
+                const capturedRow = from.r;
+                next[capturedRow][move.c] = null;
+            }
+
+            // Automatic promotion to queen for a simple classroom board.
+            if (typeOf(piece) === "p" && (move.r === 0 || move.r === 7)) {
+                next[move.r][move.c] = colorOf(piece) + "q";
+            }
+            return next;
+        }
+
+        function renderChessBoard() {
+            const boardEl = document.getElementById("interactive-chess-board");
+            if (!boardEl || !chessState) return;
+
+            boardEl.innerHTML = "";
+            for (let r=0; r<8; r++) {
+                for (let c=0; c<8; c++) {
+                    const sq = document.createElement("button");
+                    sq.type = "button";
+                    sq.className = "chess-square " + ((r+c)%2===0 ? "light" : "dark");
+                    sq.dataset.r = r;
+                    sq.dataset.c = c;
+
+                    const piece = chessState.board[r][c];
+                    if (piece) {
+                        const span = document.createElement("span");
+                        span.className = "chess-piece " + colorOf(piece);
+                        span.textContent = PIECES[colorOf(piece)][typeOf(piece)];
+                        sq.appendChild(span);
+                    }
+
+                    if (chessState.selected &&
+                        chessState.selected.r === r &&
+                        chessState.selected.c === c) {
+                        sq.classList.add("selected");
+                    }
+
+                    if (chessState.lastMove &&
+                        ((chessState.lastMove.from.r === r && chessState.lastMove.from.c === c) ||
+                         (chessState.lastMove.to.r === r && chessState.lastMove.to.c === c))) {
+                        sq.classList.add("last-move");
+                    }
+
+                    if (chessState.selected) {
+                        const legal = pseudoMoves(chessState.board, chessState.selected.r, chessState.selected.c);
+                        if (legal.some(m => m.r === r && m.c === c)) {
+                            sq.classList.add("legal");
+                            if (piece) sq.classList.add("capture");
+                        }
+                    }
+
+                    sq.addEventListener("click", () => handleChessSquare(r,c));
+                    boardEl.appendChild(sq);
+                }
+            }
+
+            const turn = document.getElementById("chess-turn");
+            const msg = document.getElementById("chess-message");
+            if (turn) turn.textContent = chessState.turn === "w" ? "White" : "Black";
+            if (msg) msg.textContent = chessState.message;
+        }
+
+        function handleChessSquare(r, c) {
+            const piece = chessState.board[r][c];
+
+            if (chessState.selected) {
+                const from = chessState.selected;
+                const legal = pseudoMoves(chessState.board, from.r, from.c);
+                const move = legal.find(m => m.r === r && m.c === c);
+
+                if (move) {
+                    const movingPiece = chessState.board[from.r][from.c];
+
+                    chessState.board = applyMove(chessState.board, from, move);
+                    chessState.lastMove = { from: {...from}, to: {r,c} };
+
+                    // Set up the one-move EN PASSANT window.
+                    chessState.enPassant = null;
+                    if (typeOf(movingPiece) === "p" && Math.abs(r - from.r) === 2) {
+                        chessState.enPassant = { r: (r + from.r) / 2, c };
+                    }
+
+                    // Helpful explicit message when en passant was used.
+                    if (move.special === "enPassant") {
+                        chessState.message = "En passant! The pawn was captured behind the destination square.";
+                    } else {
+                        chessState.turn = chessState.turn === "w" ? "b" : "w";
+                        chessState.message = `${chessState.turn === "w" ? "White" : "Black"} to move`;
+                    }
+
+                    // A move consumes the previous en-passant right.
+                    // If this was a double pawn move, it is already set above.
+                    if (move.special === "enPassant") {
+                        chessState.enPassant = null;
+                        chessState.turn = chessState.turn === "w" ? "b" : "w";
+                        chessState.message += ` ${chessState.turn === "w" ? "White" : "Black"} to move.`;
+                    }
+
+                    chessState.selected = null;
+                    renderChessBoard();
+                    return;
+                }
+
+                // Select another piece of the side to move.
+                if (piece && colorOf(piece) === chessState.turn) {
+                    chessState.selected = {r,c};
+                    chessState.message = `${chessState.turn === "w" ? "White" : "Black"} selected ${PIECES[colorOf(piece)][typeOf(piece)]}.`;
+                } else {
+                    chessState.selected = null;
+                    chessState.message = `${chessState.turn === "w" ? "White" : "Black"} to move`;
+                }
+            } else if (piece && colorOf(piece) === chessState.turn) {
+                chessState.selected = {r,c};
+                chessState.message = `${chessState.turn === "w" ? "White" : "Black"} selected ${PIECES[colorOf(piece)][typeOf(piece)]}.`;
+            }
+
+            renderChessBoard();
+        }
+
+        function showChessBoard() {
+            container.innerHTML = `
+                <div class="max-w-6xl w-full py-5">
+                    <div class="flex flex-col lg:flex-row gap-7 items-start">
+                        <div class="w-full lg:w-auto">
+                            <div class="mb-4">
+                                <button onclick="showDashboard()" class="inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white font-medium transition-colors">
+                                    <i class="fa-solid fa-arrow-left text-[10px]"></i>
+                                    Return to Lessons
+                                </button>
+                            </div>
+
+                            <div class="glass-card rounded-2xl p-4 sm:p-6 border border-gray-800">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h1 class="text-2xl font-bold text-white">Interactive Chess Board</h1>
+                                        <p class="text-xs text-gray-400 mt-1">Click a piece, then click its destination.</p>
+                                    </div>
+                                    <button onclick="resetChessGame()" class="text-xs font-semibold px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200">
+                                        <i class="fa-solid fa-rotate-left mr-1"></i> Reset
+                                    </button>
+                                </div>
+
+                                <div class="flex justify-center">
+                                    <div class="board-wrap">
+                                        <div class="files-labels">
+                                            <span>a</span><span>b</span><span>c</span><span>d</span>
+                                            <span>e</span><span>f</span><span>g</span><span>h</span>
+                                        </div>
+                                        <div id="interactive-chess-board" class="interactive-chess-board" aria-label="Interactive chess board"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <aside class="w-full lg:w-80 space-y-4 lg:mt-10">
+                            <div class="glass-card rounded-2xl p-5 border border-gray-800">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs uppercase tracking-wider text-gray-500">Turn</span>
+                                    <span id="chess-turn" class="font-bold text-blue-400">White</span>
+                                </div>
+                                <p id="chess-message" class="text-sm text-gray-300 mt-3">White to move</p>
+                            </div>
+
+                            <div class="glass-card rounded-2xl p-5 border border-gray-800">
+                                <h3 class="text-sm font-bold text-white mb-2">
+                                    <i class="fa-solid fa-wand-magic-sparkles text-blue-400 mr-1"></i>
+                                    En passant
+                                </h3>
+                                <p class="text-xs text-gray-400 leading-relaxed">
+                                    If a pawn moves two squares forward from its starting rank and lands beside an enemy pawn,
+                                    that enemy pawn may capture it as if it had moved only one square. The capture must happen immediately.
+                                </p>
+                            </div>
+
+                            <div class="glass-card rounded-2xl p-5 border border-gray-800">
+                                <h3 class="text-sm font-bold text-white mb-3">Try this en passant example</h3>
+                                <ol class="text-xs text-gray-400 space-y-2 list-decimal pl-4">
+                                    <li>Move White's e-pawn from e2 to e4.</li>
+                                    <li>Move Black's d-pawn from d7 to d5.</li>
+                                    <li>Move White's e-pawn from e4 to e5.</li>
+                                    <li>Move Black's f-pawn from f7 to f5.</li>
+                                    <li>White can now click e5, then f6 — that's en passant.</li>
+                                </ol>
+                            </div>
+                        </aside>
+                    </div>
+                </div>
+            `;
+            resetChessGame();
         }
 
         // Quiz State Evaluation Engine
