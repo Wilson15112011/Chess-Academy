@@ -102,6 +102,13 @@
             border: 5px solid rgba(30, 64, 175, .58);
         }
 
+        .chess-square.castle-move::before {
+            width: 32%;
+            height: 32%;
+            background: rgba(34, 197, 94, .75);
+            box-shadow: 0 0 0 5px rgba(34, 197, 94, .18);
+        }
+
         .chess-piece {
             font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
             font-size: clamp(32px, 7vw, 64px);
@@ -394,6 +401,7 @@
                 selected: null,
                 lastMove: null,
                 enPassant: null,
+                castling: { wK: true, wQ: true, bK: true, bQ: true },
                 message: "White to move"
             };
             renderChessBoard();
@@ -417,6 +425,34 @@
 
         function sameColor(a, b) {
             return a && b && colorOf(a) === colorOf(b);
+        }
+
+        function canCastle(board, color, side) {
+            if (!chessState || isInCheck(board, color)) return false;
+
+            const row = color === "w" ? 7 : 0;
+            const king = color + "k";
+            const rook = color + "r";
+            const right = color === "w"
+                ? (side === "K" ? "wK" : "wQ")
+                : (side === "K" ? "bK" : "bQ");
+
+            if (!chessState.castling[right]) return false;
+            if (board[row][4] !== king) return false;
+
+            if (side === "K") {
+                if (board[row][7] !== rook) return false;
+                if (board[row][5] || board[row][6]) return false;
+                if (isSquareAttacked(board, row, 5, color === "w" ? "b" : "w")) return false;
+                if (isSquareAttacked(board, row, 6, color === "w" ? "b" : "w")) return false;
+                return true;
+            }
+
+            if (board[row][0] !== rook) return false;
+            if (board[row][1] || board[row][2] || board[row][3]) return false;
+            if (isSquareAttacked(board, row, 3, color === "w" ? "b" : "w")) return false;
+            if (isSquareAttacked(board, row, 2, color === "w" ? "b" : "w")) return false;
+            return true;
         }
 
         function pseudoMoves(board, r, c) {
@@ -480,6 +516,12 @@
                     for (let dc=-1; dc<=1; dc++) {
                         if (dr || dc) add(r+dr,c+dc);
                     }
+                }
+
+                // Castling: king moves two squares toward the rook.
+                if (c === 4) {
+                    if (canCastle(board, color, "K")) moves.push({ r, c: 6, special: "castleK" });
+                    if (canCastle(board, color, "Q")) moves.push({ r, c: 2, special: "castleQ" });
                 }
             }
 
@@ -613,6 +655,14 @@
             next[move.r][move.c] = piece;
             next[from.r][from.c] = null;
 
+            if (move.special === "castleK") {
+                next[from.r][5] = next[from.r][7];
+                next[from.r][7] = null;
+            } else if (move.special === "castleQ") {
+                next[from.r][3] = next[from.r][0];
+                next[from.r][0] = null;
+            }
+
             if (move.special === "enPassant") {
                 const capturedRow = from.r;
                 next[capturedRow][move.c] = null;
@@ -677,9 +727,13 @@
                             chessState.selected.r,
                             chessState.selected.c
                         );
-                        if (legal.some(m => m.r === r && m.c === c)) {
+                        const targetMove = legal.find(m => m.r === r && m.c === c);
+                        if (targetMove) {
                             sq.classList.add("legal");
                             if (piece) sq.classList.add("capture");
+                            if (targetMove.special === "castleK" || targetMove.special === "castleQ") {
+                                sq.classList.add("castle-move");
+                            }
                         }
                     }
 
@@ -732,7 +786,23 @@
 
                 if (move) {
                     const movingPiece = chessState.board[from.r][from.c];
+                    const capturedPiece = chessState.board[move.r][move.c];
                     const wasEnPassant = move.special === "enPassant";
+                    const wasCastle = move.special === "castleK" || move.special === "castleQ";
+
+                    // Once a king or rook moves, that side loses the corresponding castling right.
+                    if (movingPiece === "wk") { chessState.castling.wK = false; chessState.castling.wQ = false; }
+                    if (movingPiece === "bk") { chessState.castling.bK = false; chessState.castling.bQ = false; }
+                    if (movingPiece === "wr" && from.r === 7 && from.c === 7) chessState.castling.wK = false;
+                    if (movingPiece === "wr" && from.r === 7 && from.c === 0) chessState.castling.wQ = false;
+                    if (movingPiece === "br" && from.r === 0 && from.c === 7) chessState.castling.bK = false;
+                    if (movingPiece === "br" && from.r === 0 && from.c === 0) chessState.castling.bQ = false;
+
+                    // Capturing an unmoved rook also removes its castling right.
+                    if (capturedPiece === "wr" && move.r === 7 && move.c === 7) chessState.castling.wK = false;
+                    if (capturedPiece === "wr" && move.r === 7 && move.c === 0) chessState.castling.wQ = false;
+                    if (capturedPiece === "br" && move.r === 0 && move.c === 7) chessState.castling.bK = false;
+                    if (capturedPiece === "br" && move.r === 0 && move.c === 0) chessState.castling.bQ = false;
 
                     chessState.board = applyMove(chessState.board, from, move);
                     chessState.lastMove = { from: {...from}, to: {r,c} };
@@ -748,6 +818,8 @@
 
                     if (wasEnPassant) {
                         chessState.message = "En passant! The pawn was captured behind the destination square.";
+                    } else if (wasCastle) {
+                        chessState.message = `${chessState.turn === "w" ? "White" : "Black"} to move — castling completed.`;
                     } else {
                         chessState.message = `${chessState.turn === "w" ? "White" : "Black"} to move`;
                     }
@@ -833,6 +905,10 @@
                                 <p class="text-xs text-gray-400 leading-relaxed">
                                     If a pawn moves two squares forward from its starting rank and lands beside an enemy pawn,
                                     that enemy pawn may capture it as if it had moved only one square. The capture must happen immediately.
+                                </p>
+                                <p class="text-xs text-gray-400 leading-relaxed mt-3">
+                                    <strong class="text-gray-200">Castling:</strong> the king can move two squares toward an unmoved rook when neither piece has moved,
+                                    the squares between them are empty, the king is not in check, and the king does not cross an attacked square.
                                 </p>
                             </div>
 
