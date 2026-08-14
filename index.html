@@ -61,6 +61,22 @@
             box-shadow: inset 0 0 0 4px rgba(59,130,246,.9);
         }
 
+        /* The king's square turns red while the king is in check. */
+        .chess-square.king-in-check {
+            background: #dc2626 !important;
+            box-shadow: inset 0 0 0 4px #ef4444, 0 0 22px rgba(239,68,68,.65);
+        }
+
+        .chess-square.king-in-check .chess-piece {
+            color: #ffffff !important;
+            text-shadow: 0 0 8px rgba(0,0,0,.7);
+        }
+
+        .check-message {
+            color: #f87171 !important;
+            font-weight: 700;
+        }
+
         .chess-square.last-move::after {
             content: "";
             position: absolute;
@@ -403,7 +419,7 @@
             return a && b && colorOf(a) === colorOf(b);
         }
 
-        function pseudoMoves(board, r, c, includeKingSafety = false) {
+        function pseudoMoves(board, r, c) {
             const piece = board[r][c];
             if (!piece) return [];
             const color = colorOf(piece);
@@ -413,6 +429,8 @@
             const add = (nr, nc, special = null) => {
                 if (!inside(nr, nc)) return;
                 const target = board[nr][nc];
+                // A king can never be captured directly; legal-move filtering
+                // will stop a move that would capture the opposing king.
                 if (!target || colorOf(target) !== color) {
                     moves.push({ r: nr, c: nc, special });
                 }
@@ -422,22 +440,25 @@
                 const dir = color === "w" ? -1 : 1;
                 const start = color === "w" ? 6 : 1;
                 const one = r + dir;
+
                 if (inside(one, c) && !board[one][c]) {
                     add(one, c);
                     const two = r + dir * 2;
-                    if (r === start && !board[two][c]) add(two, c, "doublePawn");
+                    if (r === start && !board[two][c]) {
+                        add(two, c, "doublePawn");
+                    }
                 }
 
                 for (const dc of [-1, 1]) {
                     const nr = r + dir, nc = c + dc;
-                    if (!inside(nr, nc)) continue;
-                    if (board[nr][nc] && colorOf(board[nr][nc]) !== color) {
+                    if (inside(nr, nc) && board[nr][nc] &&
+                        colorOf(board[nr][nc]) !== color) {
                         add(nr, nc);
                     }
                 }
 
-                // EN PASSANT: capture the adjacent pawn only if the
-                // immediately previous move was a two-square pawn move.
+                // EN PASSANT is only available immediately after the
+                // opponent makes a two-square pawn move.
                 if (chessState && chessState.enPassant) {
                     const ep = chessState.enPassant;
                     if (ep.r === one && Math.abs(ep.c - c) === 1 && !board[ep.r][ep.c]) {
@@ -472,9 +493,10 @@
                             if (colorOf(board[nr][nc]) !== color) {
                                 moves.push({r:nr,c:nc});
                             }
-                            break;
+                            break; // pieces block bishops, rooks and queens
                         }
-                        nr += dr; nc += dc;
+                        nr += dr;
+                        nc += dc;
                     }
                 }
             };
@@ -487,6 +509,102 @@
             }
 
             return moves;
+        }
+
+        // Returns true when a square is attacked by the given color.
+        // This is deliberately separate from legal moves so a king cannot
+        // move onto an attacked square.
+        function isSquareAttacked(board, r, c, byColor) {
+            const pawnRow = r + (byColor === "w" ? 1 : -1);
+            for (const dc of [-1, 1]) {
+                const pc = c + dc;
+                if (inside(pawnRow, pc) && board[pawnRow][pc] === byColor + "p") {
+                    return true;
+                }
+            }
+
+            const knightOffsets = [
+                [-2,-1],[-2,1],[-1,-2],[-1,2],
+                [1,-2],[1,2],[2,-1],[2,1]
+            ];
+            for (const [dr,dc] of knightOffsets) {
+                const nr=r+dr, nc=c+dc;
+                if (inside(nr,nc) && board[nr][nc] === byColor + "n") return true;
+            }
+
+            for (let dr=-1; dr<=1; dr++) {
+                for (let dc=-1; dc<=1; dc++) {
+                    if (!dr && !dc) continue;
+                    const nr=r+dr, nc=c+dc;
+                    if (inside(nr,nc) && board[nr][nc] === byColor + "k") return true;
+                }
+            }
+
+            const scan = (dirs, types) => {
+                for (const [dr,dc] of dirs) {
+                    let nr=r+dr, nc=c+dc;
+                    while (inside(nr,nc)) {
+                        const piece = board[nr][nc];
+                        if (piece) {
+                            if (colorOf(piece) === byColor && types.includes(typeOf(piece))) {
+                                return true;
+                            }
+                            break;
+                        }
+                        nr += dr;
+                        nc += dc;
+                    }
+                }
+                return false;
+            };
+
+            if (scan([[-1,0],[1,0],[0,-1],[0,1]], ["r","q"])) return true;
+            if (scan([[-1,-1],[-1,1],[1,-1],[1,1]], ["b","q"])) return true;
+
+            return false;
+        }
+
+        function findKing(board, color) {
+            for (let r=0; r<8; r++) {
+                for (let c=0; c<8; c++) {
+                    if (board[r][c] === color + "k") return {r,c};
+                }
+            }
+            return null;
+        }
+
+        function isInCheck(board, color) {
+            const king = findKing(board, color);
+            if (!king) return true;
+            return isSquareAttacked(board, king.r, king.c, color === "w" ? "b" : "w");
+        }
+
+        // Only moves that leave the moving side's own king safe are legal.
+        // This prevents pinned pieces from moving, prevents the king from
+        // moving into check, and forces a player in check to resolve it.
+        function legalMoves(board, r, c) {
+            const piece = board[r][c];
+            if (!piece) return [];
+
+            const color = colorOf(piece);
+            const candidates = pseudoMoves(board, r, c);
+            return candidates.filter(move => {
+                const next = applyMove(board, {r,c}, move);
+                return !isInCheck(next, color);
+            });
+        }
+
+        function allLegalMoves(board, color) {
+            const result = [];
+            for (let r=0; r<8; r++) {
+                for (let c=0; c<8; c++) {
+                    if (colorOf(board[r][c]) !== color) continue;
+                    for (const move of legalMoves(board, r, c)) {
+                        result.push({from:{r,c}, move});
+                    }
+                }
+            }
+            return result;
         }
 
         function applyMove(board, from, move) {
@@ -512,6 +630,13 @@
             if (!boardEl || !chessState) return;
 
             boardEl.innerHTML = "";
+
+            const currentColor = chessState.turn;
+            const inCheck = isInCheck(chessState.board, currentColor);
+            const movesForTurn = allLegalMoves(chessState.board, currentColor);
+            const checkmate = inCheck && movesForTurn.length === 0;
+            const stalemate = !inCheck && movesForTurn.length === 0;
+
             for (let r=0; r<8; r++) {
                 for (let c=0; c<8; c++) {
                     const sq = document.createElement("button");
@@ -521,6 +646,12 @@
                     sq.dataset.c = c;
 
                     const piece = chessState.board[r][c];
+
+                    // Highlight the king red whenever that side is in check.
+                    if (piece === currentColor + "k" && inCheck) {
+                        sq.classList.add("king-in-check");
+                    }
+
                     if (piece) {
                         const span = document.createElement("span");
                         span.className = "chess-piece " + colorOf(piece);
@@ -541,7 +672,11 @@
                     }
 
                     if (chessState.selected) {
-                        const legal = pseudoMoves(chessState.board, chessState.selected.r, chessState.selected.c);
+                        const legal = legalMoves(
+                            chessState.board,
+                            chessState.selected.r,
+                            chessState.selected.c
+                        );
                         if (legal.some(m => m.r === r && m.c === c)) {
                             sq.classList.add("legal");
                             if (piece) sq.classList.add("capture");
@@ -555,52 +690,73 @@
 
             const turn = document.getElementById("chess-turn");
             const msg = document.getElementById("chess-message");
-            if (turn) turn.textContent = chessState.turn === "w" ? "White" : "Black";
-            if (msg) msg.textContent = chessState.message;
+            const status = document.getElementById("chess-status");
+
+            if (turn) turn.textContent = currentColor === "w" ? "White" : "Black";
+
+            if (checkmate) {
+                chessState.message = `CHECKMATE! ${currentColor === "w" ? "Black" : "White"} wins.`;
+            } else if (stalemate) {
+                chessState.message = "STALEMATE! There are no legal moves.";
+            } else if (inCheck) {
+                chessState.message = `${currentColor === "w" ? "White" : "Black"} is in CHECK — move the king, block the check, or capture the checking piece.`;
+            }
+
+            if (msg) {
+                msg.textContent = chessState.message;
+                msg.classList.toggle("check-message", inCheck);
+            }
+
+            if (status) {
+                status.textContent = checkmate ? "Checkmate" : (stalemate ? "Stalemate" : (inCheck ? "CHECK" : "Normal"));
+                status.className = inCheck
+                    ? "font-bold text-red-400"
+                    : "font-bold text-green-400";
+            }
         }
 
         function handleChessSquare(r, c) {
+            if (!chessState) return;
+
             const piece = chessState.board[r][c];
 
             if (chessState.selected) {
                 const from = chessState.selected;
-                const legal = pseudoMoves(chessState.board, from.r, from.c);
+
+                // IMPORTANT: use legalMoves, not pseudoMoves.
+                // A pinned bishop/rook/queen cannot expose its own king.
+                // A king cannot move into check.
+                // If in check, only moves that remove the check are allowed.
+                const legal = legalMoves(chessState.board, from.r, from.c);
                 const move = legal.find(m => m.r === r && m.c === c);
 
                 if (move) {
                     const movingPiece = chessState.board[from.r][from.c];
+                    const wasEnPassant = move.special === "enPassant";
 
                     chessState.board = applyMove(chessState.board, from, move);
                     chessState.lastMove = { from: {...from}, to: {r,c} };
 
-                    // Set up the one-move EN PASSANT window.
+                    // En passant is available for exactly one opponent move.
                     chessState.enPassant = null;
                     if (typeOf(movingPiece) === "p" && Math.abs(r - from.r) === 2) {
                         chessState.enPassant = { r: (r + from.r) / 2, c };
                     }
 
-                    // Helpful explicit message when en passant was used.
-                    if (move.special === "enPassant") {
+                    chessState.turn = chessState.turn === "w" ? "b" : "w";
+                    chessState.selected = null;
+
+                    if (wasEnPassant) {
                         chessState.message = "En passant! The pawn was captured behind the destination square.";
                     } else {
-                        chessState.turn = chessState.turn === "w" ? "b" : "w";
                         chessState.message = `${chessState.turn === "w" ? "White" : "Black"} to move`;
                     }
 
-                    // A move consumes the previous en-passant right.
-                    // If this was a double pawn move, it is already set above.
-                    if (move.special === "enPassant") {
-                        chessState.enPassant = null;
-                        chessState.turn = chessState.turn === "w" ? "b" : "w";
-                        chessState.message += ` ${chessState.turn === "w" ? "White" : "Black"} to move.`;
-                    }
-
-                    chessState.selected = null;
                     renderChessBoard();
                     return;
                 }
 
-                // Select another piece of the side to move.
+                // Allow selecting another piece of the side to move.
                 if (piece && colorOf(piece) === chessState.turn) {
                     chessState.selected = {r,c};
                     chessState.message = `${chessState.turn === "w" ? "White" : "Black"} selected ${PIECES[colorOf(piece)][typeOf(piece)]}.`;
@@ -610,7 +766,12 @@
                 }
             } else if (piece && colorOf(piece) === chessState.turn) {
                 chessState.selected = {r,c};
-                chessState.message = `${chessState.turn === "w" ? "White" : "Black"} selected ${PIECES[colorOf(piece)][typeOf(piece)]}.`;
+
+                if (legalMoves(chessState.board, r, c).length === 0) {
+                    chessState.message = "That piece has no legal moves.";
+                } else {
+                    chessState.message = `${chessState.turn === "w" ? "White" : "Black"} selected ${PIECES[colorOf(piece)][typeOf(piece)]}.`;
+                }
             }
 
             renderChessBoard();
@@ -656,6 +817,10 @@
                                 <div class="flex items-center justify-between">
                                     <span class="text-xs uppercase tracking-wider text-gray-500">Turn</span>
                                     <span id="chess-turn" class="font-bold text-blue-400">White</span>
+                                </div>
+                                <div class="flex items-center justify-between mt-3">
+                                    <span class="text-xs uppercase tracking-wider text-gray-500">Status</span>
+                                    <span id="chess-status" class="font-bold text-green-400">Normal</span>
                                 </div>
                                 <p id="chess-message" class="text-sm text-gray-300 mt-3">White to move</p>
                             </div>
