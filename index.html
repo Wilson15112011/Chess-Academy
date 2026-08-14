@@ -21,6 +21,68 @@
             background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
         }
 
+
+        .promotion-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(3, 7, 18, .78);
+            backdrop-filter: blur(5px);
+        }
+
+        .promotion-card {
+            width: min(430px, 92vw);
+            padding: 24px;
+            border-radius: 18px;
+            border: 1px solid #374151;
+            background: #111827;
+            box-shadow: 0 25px 70px rgba(0,0,0,.55);
+        }
+
+        .promotion-options {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .promotion-option {
+            min-height: 115px;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            background: #1f2937;
+            color: #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: transform .12s ease, background .12s ease, border-color .12s ease;
+        }
+
+        .promotion-option:hover {
+            transform: translateY(-2px);
+            background: #273449;
+            border-color: #60a5fa;
+        }
+
+        .promotion-piece {
+            font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
+            font-size: 52px;
+            line-height: 1;
+        }
+
+        .promotion-piece.w { color: #fffaf0; }
+        .promotion-piece.b { color: #111827; text-shadow: 0 1px 1px rgba(255,255,255,.2); }
+
+        @media (max-width: 500px) {
+            .promotion-options { grid-template-columns: repeat(2, 1fr); }
+        }
+
         .board-wrap {
             width: min(78vw, 560px);
             position: relative;
@@ -742,9 +804,10 @@
                 next[capturedRow][move.c] = null;
             }
 
-            // Automatic promotion to queen for a simple classroom board.
+            // Promotion is chosen by the player when a pawn reaches the last rank.
+            // For internal legal-move simulation, use a queen as the default piece.
             if (typeOf(piece) === "p" && (move.r === 0 || move.r === 7)) {
-                next[move.r][move.c] = colorOf(piece) + "q";
+                next[move.r][move.c] = colorOf(piece) + (move.promotion || "q");
             }
             return next;
         }
@@ -856,7 +919,52 @@
             }
         }
 
-        function handleChessSquare(r, c) {
+
+        function showPromotionDialog(color, onChoose) {
+            const existing = document.getElementById("promotion-modal");
+            if (existing) existing.remove();
+
+            const modal = document.createElement("div");
+            modal.id = "promotion-modal";
+            modal.className = "promotion-overlay";
+            modal.innerHTML = `
+                <div class="promotion-card" role="dialog" aria-modal="true" aria-labelledby="promotion-title">
+                    <div class="text-center mb-4">
+                        <div id="promotion-title" class="text-lg font-bold text-white">Choose a promotion</div>
+                        <div class="text-xs text-gray-400 mt-1">Select the piece for your pawn.</div>
+                    </div>
+                    <div class="promotion-options">
+                        <button type="button" class="promotion-option" data-piece="q" title="Queen">
+                            <span class="promotion-piece ${color}">${PIECES[color].q}</span>
+                            <span>Queen</span>
+                        </button>
+                        <button type="button" class="promotion-option" data-piece="r" title="Rook">
+                            <span class="promotion-piece ${color}">${PIECES[color].r}</span>
+                            <span>Rook</span>
+                        </button>
+                        <button type="button" class="promotion-option" data-piece="b" title="Bishop">
+                            <span class="promotion-piece ${color}">${PIECES[color].b}</span>
+                            <span>Bishop</span>
+                        </button>
+                        <button type="button" class="promotion-option" data-piece="n" title="Knight">
+                            <span class="promotion-piece ${color}">${PIECES[color].n}</span>
+                            <span>Knight</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            modal.querySelectorAll(".promotion-option").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const choice = btn.dataset.piece;
+                    modal.remove();
+                    onChoose(choice);
+                });
+            });
+        }
+
+        async function handleChessSquare(r, c) {
             if (!chessState) return;
 
             const piece = chessState.board[r][c];
@@ -872,6 +980,21 @@
                 const move = legal.find(m => m.r === r && m.c === c);
 
                 if (move) {
+                    const movingPiecePreview = chessState.board[from.r][from.c];
+
+                    // If a pawn reaches the last rank, let the player choose
+                    // Queen, Rook, Bishop, or Knight before the move is committed.
+                    let promotion = null;
+                    if (typeOf(movingPiecePreview) === "p" && (move.r === 0 || move.r === 7)) {
+                        chessState.message = "Choose a piece for promotion.";
+                        renderChessBoard();
+                        promotion = await new Promise(resolve => {
+                            showPromotionDialog(colorOf(movingPiecePreview), resolve);
+                        });
+                        if (!promotion || !chessState) return;
+                        move.promotion = promotion;
+                    }
+
                     // Save the complete position so Undo restores castling and en-passant rights too.
                     const snapshot = cloneChessState(chessState);
                     snapshot.history = [];
@@ -911,6 +1034,9 @@
                         chessState.message = "En passant! The pawn was captured behind the destination square.";
                     } else if (wasCastle) {
                         chessState.message = `${chessState.turn === "w" ? "White" : "Black"} to move — castling completed.`;
+                    } else if (promotion) {
+                        const promotionNames = { q: "Queen", r: "Rook", b: "Bishop", n: "Knight" };
+                        chessState.message = `Promoted to ${promotionNames[promotion]}. ${chessState.turn === "w" ? "White" : "Black"} to move`;
                     } else {
                         chessState.message = `${chessState.turn === "w" ? "White" : "Black"} to move`;
                     }
